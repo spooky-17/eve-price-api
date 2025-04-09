@@ -1,4 +1,4 @@
-// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 기반으로 전환)
+// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 기반으로 전환, aggregates 경로 수정)
 // Fuzzwork의 aggregates API를 사용하여 typeID 기준 평균 Buy/Sell 가격을 조회합니다
 
 export default async function handler(req, res) {
@@ -8,12 +8,10 @@ export default async function handler(req, res) {
   try {
     const log = (msg, data) => console.error(`[EVE-LOG] ${msg}`, data);
 
-    // PLEX와 같은 주요 아이템의 typeID 미리 지정 (추후 DB 매핑으로 확장 가능)
     const typeIdMap = {
       "PLEX": 44992,
       "Large Skill Injector": 40520,
       "Small Skill Injector": 40519
-      // 필요 시 추가
     };
 
     const typeID = typeIdMap[itemName];
@@ -38,13 +36,13 @@ export default async function handler(req, res) {
     const marketData = await marketRes.json();
     log("Fuzzwork 시세:", marketData);
 
-    const itemData = marketData[String(typeID)]; // 🔧 키를 문자열로 변환해 접근
+    const itemData = marketData.aggregates?.[String(typeID)];
     if (!itemData) {
       return res.status(404).json({ error: "시세 데이터를 찾을 수 없습니다.", typeID });
     }
 
-    const buy = itemData.buy?.max ?? null;
-    const sell = itemData.sell?.min ?? null;
+    const buy = itemData.buy?.max ?? null;  // 최고 매입가
+    const sell = itemData.sell?.min ?? null; // 최저 판매가
 
     return res.status(200).json({ item: itemName, typeID, buy, sell });
 
