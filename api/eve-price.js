@@ -1,4 +1,4 @@
-// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 기반으로 전환, aggregates 경로 수정)
+// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 실제 응답 구조에 맞게 수정)
 // Fuzzwork의 aggregates API를 사용하여 typeID 기준 평균 Buy/Sell 가격을 조회합니다
 
 export default async function handler(req, res) {
@@ -36,13 +36,13 @@ export default async function handler(req, res) {
     const marketData = await marketRes.json();
     log("Fuzzwork 시세:", marketData);
 
-    const itemData = marketData.aggregates?.[String(typeID)];
-    if (!itemData) {
+    // Fuzzwork 응답은 바로 buy/sell 객체를 포함
+    const buy = marketData.buy?.max ?? null;
+    const sell = marketData.sell?.min ?? null;
+
+    if (buy === null && sell === null) {
       return res.status(404).json({ error: "시세 데이터를 찾을 수 없습니다.", typeID });
     }
-
-    const buy = itemData.buy?.max ?? null;  // 최고 매입가
-    const sell = itemData.sell?.min ?? null; // 최저 판매가
 
     return res.status(200).json({ item: itemName, typeID, buy, sell });
 
@@ -51,6 +51,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "API 요청 실패", detail: err.message });
   }
 }
+
 
 
 
