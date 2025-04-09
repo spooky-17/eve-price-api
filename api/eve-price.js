@@ -1,3 +1,6 @@
+// 📦 Vercel Edge Function용 코드 (Jita 실시간 시세 기반 + User-Agent 헤더 포함)
+// ESI의 'markets/orders' 엔드포인트를 사용하여 The Forge 지역의 실시간 Buy/Sell 데이터를 제공합니다
+
 export const config = {
   runtime: 'edge',
 };
@@ -7,6 +10,7 @@ export default async function handler(req) {
   const itemName = searchParams.get("item") || "PLEX";
 
   try {
+    // 1단계: ESI API로 itemName의 typeID 조회
     const esiSearchRes = await fetch(`https://esi.evetech.net/latest/search/?categories=inventory_type&search=${encodeURIComponent(itemName)}&strict=true`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)'
@@ -24,7 +28,6 @@ export default async function handler(req) {
 
     const typeID = typeIDs[0];
     const regionID = 10000002;
-
     const headers = {
       'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)'
     };
@@ -52,5 +55,6 @@ export default async function handler(req) {
       headers: { "Content-Type": "application/json" },
     });
   }
-}
+} 
+
 
