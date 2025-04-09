@@ -1,4 +1,4 @@
-// 📦 Vercel Edge Function용 코드 (Jita 실시간 시세 기반 + User-Agent 헤더 포함 + 오류 로그 출력)
+// 📦 Vercel Edge Function용 코드 (Jita 실시간 시세 기반 + User-Agent 헤더 포함 + 응답 포맷 검사 및 디버깅 강화)
 // ESI의 'markets/orders' 엔드포인트를 사용하여 The Forge 지역의 실시간 Buy/Sell 데이터를 제공합니다
 
 export const config = {
@@ -13,11 +13,19 @@ export default async function handler(req) {
     const log = (msg, data) => console.error(`[EVE-LOG] ${msg}`, data);
 
     // 1단계: ESI API로 itemName의 typeID 조회
-    const esiSearchRes = await fetch(`https://esi.evetech.net/latest/search/?categories=inventory_type&search=${encodeURIComponent(itemName)}&strict=true`, {
+    const esiSearchRes = await fetch(`https://esi.evetech.net/latest/search/?categories=inventory_type&search=${encodeURIComponent(itemName)}&strict=false`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)'
       }
     });
+
+    const contentType = esiSearchRes.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const text = await esiSearchRes.text();
+      log("ESI 응답이 JSON이 아님:", text);
+      throw new Error("ESI 응답이 JSON이 아님");
+    }
+
     const esiSearchData = await esiSearchRes.json();
     log("ESI 검색 결과:", esiSearchData);
 
@@ -40,15 +48,13 @@ export default async function handler(req) {
       fetch(`https://esi.evetech.net/latest/markets/${regionID}/orders/?order_type=sell&type_id=${typeID}`, { headers })
     ]);
 
-    if (!buyRes.ok) {
-      const text = await buyRes.text();
-      log("Buy 응답 오류:", text);
-      throw new Error("Buy fetch 실패");
-    }
-    if (!sellRes.ok) {
-      const text = await sellRes.text();
-      log("Sell 응답 오류:", text);
-      throw new Error("Sell fetch 실패");
+    for (const [label, res] of [["Buy", buyRes], ["Sell", sellRes]]) {
+      const ct = res.headers.get("content-type") || "";
+      if (!res.ok || !ct.includes("application/json")) {
+        const txt = await res.text();
+        log(`${label} 응답 오류:`, txt);
+        throw new Error(`${label} fetch 실패`);
+      }
     }
 
     const [buyData, sellData] = await Promise.all([
