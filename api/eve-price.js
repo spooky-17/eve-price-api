@@ -1,22 +1,23 @@
-// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 실제 응답 구조에 맞게 수정)
+// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 실제 응답 구조에 맞게 수정 + 입력값 자동 보정 추가)
 // Fuzzwork의 aggregates API를 사용하여 typeID 기준 평균 Buy/Sell 가격을 조회합니다
 
 export default async function handler(req, res) {
   const { searchParams } = new URL(req.url, `http://${req.headers.host}`);
-  const itemName = searchParams.get("item") || "PLEX";
+  const itemNameRaw = searchParams.get("item") || "PLEX";
+  const itemName = itemNameRaw.toLowerCase().trim();
 
   try {
     const log = (msg, data) => console.error(`[EVE-LOG] ${msg}`, data);
 
     const typeIdMap = {
-      "PLEX": 44992,
-      "Large Skill Injector": 40520,
-      "Small Skill Injector": 40519
+      "plex": 44992,
+      "large skill injector": 40520,
+      "small skill injector": 40519
     };
 
     const typeID = typeIdMap[itemName];
     if (!typeID) {
-      return res.status(404).json({ error: "지원하지 않는 아이템입니다.", item: itemName });
+      return res.status(404).json({ error: "지원하지 않는 아이템입니다.", item: itemNameRaw });
     }
 
     const apiUrl = `https://market.fuzzwork.co.uk/aggregates/?typeid=${typeID}`;
@@ -44,7 +45,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "시세 데이터를 찾을 수 없습니다.", typeID });
     }
 
-    return res.status(200).json({ item: itemName, typeID, buy, sell });
+    return res.status(200).json({ item: itemNameRaw, typeID, buy, sell });
 
   } catch (err) {
     console.error("[EVE-ERROR]", err);
