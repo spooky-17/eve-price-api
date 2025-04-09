@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     const marketData = await marketRes.json();
     log("Fuzzwork 시세:", marketData);
 
-    const itemData = marketData[typeID];
+    const itemData = marketData[String(typeID)]; // 🔧 키를 문자열로 변환해 접근
     if (!itemData) {
       return res.status(404).json({ error: "시세 데이터를 찾을 수 없습니다.", typeID });
     }
@@ -53,5 +53,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "API 요청 실패", detail: err.message });
   }
 }
+
 
 
