@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     const marketData = await marketRes.json();
     log("Fuzzwork 시세:", marketData);
 
-    const itemData = marketData[String(typeID)];
+    const itemData = marketData.aggregates?.[String(typeID)];
     const buy = itemData?.buy?.max ?? null;
     const sell = itemData?.sell?.min ?? null;
 
@@ -63,6 +63,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "API 요청 실패", detail: err.message });
   }
 }
+
 
 
 
