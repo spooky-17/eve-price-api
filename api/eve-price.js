@@ -48,9 +48,9 @@ export default async function handler(req, res) {
     const marketData = await marketRes.json();
     log("Fuzzwork 시세:", marketData);
 
-    // Fuzzwork 응답은 바로 buy/sell 객체를 포함
-    const buy = marketData.buy?.max ?? null;
-    const sell = marketData.sell?.min ?? null;
+    const itemData = marketData[String(typeID)];
+    const buy = itemData?.buy?.max ?? null;
+    const sell = itemData?.sell?.min ?? null;
 
     if (buy === null && sell === null) {
       return res.status(404).json({ error: "시세 데이터를 찾을 수 없습니다.", typeID });
