@@ -1,5 +1,5 @@
-// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 실제 응답 구조에 맞게 수정 + 입력값 자동 보정 추가)
-// Fuzzwork의 aggregates API를 사용하여 typeID 기준 평균 Buy/Sell 가격을 조회합니다
+// 📦 Vercel Serverless Function용 코드 (Fuzzwork API + 입력값 자동 보정 + 실시간 typeID 조회 추가)
+// Fuzzwork API로 실시간 typeID 조회 후 가격을 반환합니다
 
 export default async function handler(req, res) {
   const { searchParams } = new URL(req.url, `http://${req.headers.host}`);
@@ -9,15 +9,26 @@ export default async function handler(req, res) {
   try {
     const log = (msg, data) => console.error(`[EVE-LOG] ${msg}`, data);
 
+    // 1차 고정 매핑
     const typeIdMap = {
       "plex": 44992,
       "large skill injector": 40520,
       "small skill injector": 40519
     };
 
-    const typeID = typeIdMap[itemName];
+    let typeID = typeIdMap[itemName];
+
+    // 고정 매핑에 없을 경우 → Fuzzwork API로 실시간 typeID 조회
     if (!typeID) {
-      return res.status(404).json({ error: "지원하지 않는 아이템입니다.", item: itemNameRaw });
+      const lookupUrl = `https://www.fuzzwork.co.uk/api/typeid.php?typename=${encodeURIComponent(itemNameRaw.trim())}`;
+      const lookupRes = await fetch(lookupUrl);
+      const lookupData = await lookupRes.json();
+      log("실시간 typeID 조회 결과:", lookupData);
+      typeID = lookupData.typeID;
+    }
+
+    if (!typeID) {
+      return res.status(404).json({ error: "아이템을 찾을 수 없습니다.", item: itemNameRaw });
     }
 
     const apiUrl = `https://market.fuzzwork.co.uk/aggregates/?typeid=${typeID}`;
@@ -52,7 +63,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "API 요청 실패", detail: err.message });
   }
 }
-
 
 
 
