@@ -1,74 +1,57 @@
-// 📦 Vercel Serverless Function용 코드 (Jita 실시간 시세 기반 + User-Agent + Accept 헤더 포함 + 안정성 강화)
-// ESI의 'markets/orders' 엔드포인트를 사용하여 The Forge 지역의 실시간 Buy/Sell 데이터를 제공합니다
+// 📦 Vercel Serverless Function용 코드 (Fuzzwork API 기반으로 전환)
+// Fuzzwork의 aggregates API를 사용하여 typeID 기준 평균 Buy/Sell 가격을 조회합니다
 
 export default async function handler(req, res) {
-  const { searchParams } = new URL(req.url, `http://${req.headers.host}`); // Node.js 환경에서 절대 URL 필요
+  const { searchParams } = new URL(req.url, `http://${req.headers.host}`);
   const itemName = searchParams.get("item") || "PLEX";
 
   try {
     const log = (msg, data) => console.error(`[EVE-LOG] ${msg}`, data);
 
-    // 공통 헤더 정의 (브라우저처럼 구성)
-    const commonHeaders = {
-      'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)',
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip'
+    // PLEX와 같은 주요 아이템의 typeID 미리 지정 (추후 DB 매핑으로 확장 가능)
+    const typeIdMap = {
+      "PLEX": 44992,
+      "Large Skill Injector": 40520,
+      "Small Skill Injector": 40519
+      // 필요 시 추가
     };
 
-    // 1단계: ESI API로 itemName의 typeID 조회
-    const esiSearchRes = await fetch(`https://esi.evetech.net/latest/search/?categories=inventory_type&search=${encodeURIComponent(itemName)}&strict=false`, {
-      headers: commonHeaders
+    const typeID = typeIdMap[itemName];
+    if (!typeID) {
+      return res.status(404).json({ error: "지원하지 않는 아이템입니다.", item: itemName });
+    }
+
+    const apiUrl = `https://market.fuzzwork.co.uk/aggregates/?typeid=${typeID}`;
+    const marketRes = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)',
+        'Accept': 'application/json'
+      }
     });
 
-    const contentType = esiSearchRes.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      const text = await esiSearchRes.text();
-      log("ESI 응답이 JSON이 아님:", text);
-      return res.status(500).json({ error: "ESI 응답이 JSON이 아님" });
+    if (!marketRes.ok) {
+      const text = await marketRes.text();
+      log("Fuzzwork 응답 오류:", text);
+      return res.status(500).json({ error: "Fuzzwork API 오류", detail: text });
     }
 
-    const esiSearchData = await esiSearchRes.json();
-    log("ESI 검색 결과:", esiSearchData);
+    const marketData = await marketRes.json();
+    log("Fuzzwork 시세:", marketData);
 
-    const typeIDs = esiSearchData.inventory_type;
-    if (!typeIDs || !Array.isArray(typeIDs) || typeIDs.length === 0) {
-      return res.status(404).json({ error: "아이템을 찾을 수 없습니다.", item: itemName });
+    const itemData = marketData[typeID];
+    if (!itemData) {
+      return res.status(404).json({ error: "시세 데이터를 찾을 수 없습니다.", typeID });
     }
 
-    const typeID = typeIDs[0];
-    const regionID = 10000002;
+    const buy = itemData.buy?.max ?? null;
+    const sell = itemData.sell?.min ?? null;
 
-    const [buyRes, sellRes] = await Promise.all([
-      fetch(`https://esi.evetech.net/latest/markets/${regionID}/orders/?order_type=buy&type_id=${typeID}`, { headers: commonHeaders }),
-      fetch(`https://esi.evetech.net/latest/markets/${regionID}/orders/?order_type=sell&type_id=${typeID}`, { headers: commonHeaders })
-    ]);
-
-    for (const [label, resObj] of [["Buy", buyRes], ["Sell", sellRes]]) {
-      const ct = resObj.headers.get("content-type") || "";
-      if (!resObj.ok || !ct.includes("application/json")) {
-        const txt = await resObj.text();
-        log(`${label} 응답 오류:`, txt);
-        return res.status(500).json({ error: `${label} fetch 실패`, detail: txt });
-      }
-    }
-
-    const [buyData, sellData] = await Promise.all([
-      buyRes.json(),
-      sellRes.json()
-    ]);
-
-    log("Buy 데이터:", buyData);
-    log("Sell 데이터:", sellData);
-
-    const highestBuy = buyData.sort((a, b) => b.price - a.price)[0]?.price ?? null;
-    const lowestSell = sellData.sort((a, b) => a.price - b.price)[0]?.price ?? null;
-
-    return res.status(200).json({ item: itemName, typeID, buy: highestBuy, sell: lowestSell });
+    return res.status(200).json({ item: itemName, typeID, buy, sell });
 
   } catch (err) {
     console.error("[EVE-ERROR]", err);
     return res.status(500).json({ error: "API 요청 실패", detail: err.message });
   }
-} 
+}
 
 
