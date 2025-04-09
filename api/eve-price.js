@@ -1,4 +1,4 @@
-// 📦 Vercel Edge Function용 코드 (Jita 실시간 시세 기반 + User-Agent 헤더 포함 + 응답 포맷 검사 및 디버깅 강화)
+// 📦 Vercel Edge Function용 코드 (Jita 실시간 시세 기반 + User-Agent + Accept 헤더 포함 + 응답 포맷 검사 및 디버깅 강화)
 // ESI의 'markets/orders' 엔드포인트를 사용하여 The Forge 지역의 실시간 Buy/Sell 데이터를 제공합니다
 
 export const config = {
@@ -12,11 +12,16 @@ export default async function handler(req) {
   try {
     const log = (msg, data) => console.error(`[EVE-LOG] ${msg}`, data);
 
+    // 공통 헤더 정의 (브라우저처럼 구성)
+    const commonHeaders = {
+      'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)',
+      'Accept': 'application/json',
+      'Accept-Encoding': 'gzip'
+    };
+
     // 1단계: ESI API로 itemName의 typeID 조회
     const esiSearchRes = await fetch(`https://esi.evetech.net/latest/search/?categories=inventory_type&search=${encodeURIComponent(itemName)}&strict=false`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)'
-      }
+      headers: commonHeaders
     });
 
     const contentType = esiSearchRes.headers.get("content-type") || "";
@@ -39,13 +44,10 @@ export default async function handler(req) {
 
     const typeID = typeIDs[0];
     const regionID = 10000002;
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (compatible; EvePriceBot/1.0; +https://gptonline.ai)'
-    };
 
     const [buyRes, sellRes] = await Promise.all([
-      fetch(`https://esi.evetech.net/latest/markets/${regionID}/orders/?order_type=buy&type_id=${typeID}`, { headers }),
-      fetch(`https://esi.evetech.net/latest/markets/${regionID}/orders/?order_type=sell&type_id=${typeID}`, { headers })
+      fetch(`https://esi.evetech.net/latest/markets/${regionID}/orders/?order_type=buy&type_id=${typeID}`, { headers: commonHeaders }),
+      fetch(`https://esi.evetech.net/latest/markets/${regionID}/orders/?order_type=sell&type_id=${typeID}`, { headers: commonHeaders })
     ]);
 
     for (const [label, res] of [["Buy", buyRes], ["Sell", sellRes]]) {
